@@ -1,12 +1,11 @@
 import os
 import requests
-import time
+from flask import Flask, request
 
+# Получаем переменные окружения
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHANNEL_USERNAME = os.getenv("CHANNEL_USERNAME")
 WEBHOOK_URL = f"https://{os.getenv('RENDER_EXTERNAL_HOSTNAME')}/webhook/{TELEGRAM_TOKEN}"
-
-from flask import Flask, request
 
 app = Flask(__name__)
 
@@ -35,3 +34,5 @@ def set_webhook():
 
 if __name__ == '__main__':
     set_webhook()
+    # Важно для Render: слушаем порт 5000 на всех интерфейсах
+    app.run(host='0.0.0.0', port=5000)

@@ -3,10 +3,12 @@ import time
 import requests
 import os
 
-TELEGRAM_TOKEN = os.getenv("7756641033:AAGXj2ywYtdnaZlgZFKBtF_Yj9ud0pimR0w
-")
-CHANNEL_USERNAME = os.getenv("@oh_new_by")
+# === НАСТРОЙКИ ===
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+CHANNEL_USERNAME = os.getenv("CHANNEL_USERNAME")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
+# === RSS-лента ===
 RSS_FEED_URL = "https://nash-dom.info/feed"
 published_links = set()
 
@@ -15,11 +17,8 @@ def get_latest_article():
     for entry in feed.entries:
         if entry.link not in published_links:
             published_links.add(entry.link)
-            return {
-                "title": entry.title,
-                "link": entry.link
-            }
-    return None
+            return entry.title, entry.link
+    return None, None
 
 def send_to_telegram(text):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
@@ -31,12 +30,13 @@ def send_to_telegram(text):
     response = requests.post(url, data=data)
     return response.status_code == 200
 
-print("Бот запущен (заголовки + ссылки)...")
+print("Бот запущен (только заголовки и ссылки)...")
+
 while True:
-    article = get_latest_article()
-    if article:
-        print("Новая статья:", article["title"])
-        text = f"<b>{article['title']}</b>\n\nЧитать: {article['link']}"
-        success = send_to_telegram(text)
-        print("Успешно отправлено:", success)
-    time.sleep(300)
+    title, link = get_latest_article()
+    if title and link:
+        print(f"Найдена новая статья: {title}")
+        message = f"<b>{title}</b>\n{link}"
+        success = send_to_telegram(message)
+        print("Пост отправлен:", success)
+    time.sleep(60)  # Проверка раз в минуту

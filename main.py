@@ -2,25 +2,43 @@ import feedparser
 import time
 import requests
 import os
+from datetime import datetime, timedelta
 
-# === НАСТРОЙКИ ===
+# === Настройки ===
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHANNEL_USERNAME = os.getenv("CHANNEL_USERNAME")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-
-# === RSS-лента ===
 RSS_FEED_URL = "https://nash-dom.info/feed"
-published_links = set()
 
-def get_latest_article():
+# === Загрузка уже отправленных ссылок ===
+def load_sent_links():
+    try:
+        with open("sent.txt", "r") as f:
+            return set(f.read().splitlines())
+    except FileNotFoundError:
+        return set()
+
+def save_sent_link(link):
+    with open("sent.txt", "a") as f:
+        f.write(link + "\n")
+
+# === Проверка, что статья новая (опубликована за последние 24 часа) ===
+def is_recent(entry, hours=24):
+    if not hasattr(entry, 'published_parsed'):
+        return False
+    published = datetime.fromtimestamp(time.mktime(entry.published_parsed))
+    return datetime.utcnow() - published <= timedelta(hours=hours)
+
+# === Получение новой статьи ===
+def get_latest_article(sent_links):
     feed = feedparser.parse(RSS_FEED_URL)
     for entry in feed.entries:
-        if entry.link not in published_links:
-            published_links.add(entry.link)
-            return entry.title, entry.link
-    return None, None
+        if entry.link not in sent_links and is_recent(entry):
+            return entry
+    return None
 
-def send_to_telegram(text):
+# === Отправка поста в Telegram ===
+def send_to_telegram(title, link):
+    text = f"<b>{title}</b>\n{link}"
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     data = {
         "chat_id": CHANNEL_USERNAME,
@@ -28,15 +46,19 @@ def send_to_telegram(text):
         "parse_mode": "HTML"
     }
     response = requests.post(url, data=data)
-    return response.status_code == 200
+    return response.ok
 
-print("Бот запущен (только заголовки и ссылки)...")
+# === Главный цикл ===
+print("Бот запущен — фильтрует по дате (24ч) и не дублирует статьи.")
+
+sent_links = load_sent_links()
 
 while True:
-    title, link = get_latest_article()
-    if title and link:
-        print(f"Найдена новая статья: {title}")
-        message = f"<b>{title}</b>\n{link}"
-        success = send_to_telegram(message)
-        print("Пост отправлен:", success)
-    time.sleep(60)  # Проверка раз в минуту
+    article = get_latest_article(sent_links)
+    if article:
+        print("Новая статья:", article.title)
+        success = send_to_telegram(article.title, article.link)
+        print("Отправка успешна:", success)
+        sent_links.add(article.link)
+        save_sent_link(article.link)
+    time.sleep(300)  # Проверка каждые 5 минут
